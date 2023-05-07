@@ -16,7 +16,7 @@
 
 
 #include "circleBoxTest.cu_inl"
-#include "exclusiveScan.cu_inl"
+// #include "exclusiveScan.cu_inl"
 
 #define BLOCKDIM 32
 
@@ -407,7 +407,7 @@ __global__ void kernelRenderCircles() {
 
     float4* imgPtr = (float4*)(&cuConstRendererParams.imageData[4 * (py * imageWidth + px)]);
 
-    if (for int index=0; index< cuConstRendererParams.numCircles;index++){
+    for (int index=0; index< cuConstRendererParams.numCircles;index++){
         int index3 = 3 * index;
         // read position and radius
         float3 p = *(float3*)(&cuConstRendererParams.position[index3]);
