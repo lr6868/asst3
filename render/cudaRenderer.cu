@@ -456,7 +456,7 @@ __global__ void kernelRenderCircles() {
             if(inSection[i]){
                 int index3 = 3 * inSection[i];
                 p = *(float3*)(&cuConstRendererParams.position[index3]);
-                rad = cuConstRendererParams.radius[index];
+                rad = cuConstRendererParams.radius[inSection[i]];
                 float2 pixelCenterNorm = make_float2(invWidth * (static_cast<float>(px) + 0.5f),
                                                     invHeight * (static_cast<float>(py) + 0.5f));
                 shadePixel(inSection[i], pixelCenterNorm, p, imgPtr);
