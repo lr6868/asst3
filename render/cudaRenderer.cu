@@ -18,6 +18,8 @@
 #include "circleBoxTest.cu_inl"
 #include "exclusiveScan.cu_inl"
 
+#define BLOCKDIM 32
+
 ////////////////////////////////////////////////////////////////////////////////////////
 // Putting all the cuda kernels here
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -625,9 +627,10 @@ CudaRenderer::advanceAnimation() {
 void
 CudaRenderer::render() {
 
-    // 256 threads per block is a healthy number
-    dim3 blockDim(256, 1);
-    dim3 gridDim((numCircles + blockDim.x - 1) / blockDim.x);
+    dim3 blockDim(BLOCKDIM, BLOCKDIM);
+    size_t gridDimX = (image->width + blockDim.x - 1) / blockDim.x;
+    size_t gridDimY = (image->height + blockDim.y - 1) / blockDim.y;
+    dim3 gridDim(gridDimX, gridDimY);
 
     kernelRenderCircles<<<gridDim, blockDim>>>();
     cudaDeviceSynchronize();
