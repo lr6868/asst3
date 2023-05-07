@@ -15,10 +15,10 @@
 #include "util.h"
 
 
-#include "circleBoxTest.cu_inl"
 // #include "exclusiveScan.cu_inl"
 
 #define BLOCKDIM 32
+#define BLOCKSIZE 1024
 
 ////////////////////////////////////////////////////////////////////////////////////////
 // Putting all the cuda kernels here
@@ -61,6 +61,29 @@ __constant__ float  cuConstColorRamp[COLOR_MAP_SIZE][3];
 // file simpler and to seperate code that should not be modified
 #include "noiseCuda.cu_inl"
 #include "lookupColor.cu_inl"
+
+
+__device__ __inline__ int
+circleInBox(
+    float circleX, float circleY, float circleRadius,
+    float boxL, float boxR, float boxT, float boxB)
+{
+
+    // clamp circle center to box (finds the closest point on the box)
+    float closestX = (circleX > boxL) ? ((circleX < boxR) ? circleX : boxR) : boxL;
+    float closestY = (circleY > boxB) ? ((circleY < boxT) ? circleY : boxT) : boxB;
+
+    // is circle radius less than the distance to the closest point on
+    // the box?
+    float distX = closestX - circleX;
+    float distY = closestY - circleY;
+
+    if ( ((distX*distX) + (distY*distY)) <= (circleRadius*circleRadius) ) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
 
 
 // kernelClearImageSnowflake -- (CUDA device code)
@@ -401,20 +424,45 @@ __global__ void kernelRenderCircles() {
     short imageWidth = cuConstRendererParams.imageWidth;
     short imageHeight = cuConstRendererParams.imageHeight;
 
+    // Get the left, right, top and bottom of the section
+    float boxL = static_cast<float>(blockIdx.x) / gridDim.x;
+    float boxR = boxL + static_cast<float>(blockDim.x) / imageWidth;
+    float boxB = static_cast<float>(blockIdx.y) / gridDim.y;
+    float boxT = boxB + static_cast<float>(blockDim.y) / imageHeight;
+    //index for circles
+    size_t tIdx = blockDim.x * threadIdx.y + threadIdx.x;
+
+    __shared__ uint inSection[BLOCKSIZE];
+    // __shared__ uint inclusiveOutput[BLOCKSIZE];
+    // __shared__ uint probableCircles[BLOCKSIZE];
+    // __shared__ uint scratchPad[2*BLOCKSIZE];
+
 
     float invWidth = 1.f / imageWidth;
     float invHeight = 1.f / imageHeight;
 
     float4* imgPtr = (float4*)(&cuConstRendererParams.imageData[4 * (py * imageWidth + px)]);
 
-    for (int index=0; index< cuConstRendererParams.numCircles;index++){
+    for (int index=tIdx; index< cuConstRendererParams.numCircles;index+=BLOCKSIZE){//是否要将cuConstRendererParams.numCircles变成const？
+        
+        
         int index3 = 3 * index;
         // read position and radius
         float3 p = *(float3*)(&cuConstRendererParams.position[index3]);
         float  rad = cuConstRendererParams.radius[index];
-        float2 pixelCenterNorm = make_float2(invWidth * (static_cast<float>(px) + 0.5f),
-                                                 invHeight * (static_cast<float>(py) + 0.5f));
-            shadePixel(index, pixelCenterNorm, p, imgPtr);
+
+        inSection[tIdx]=circleInBox(p.x, p.y, rad, boxL, boxR, boxT, boxB)?index:0;
+        for(int i=0;i<BLOCKSIZE;i++){
+            if(inSection[i]){
+                int index3 = 3 * inSection[i];
+                p = *(float3*)(&cuConstRendererParams.position[index3]);
+                rad = cuConstRendererParams.radius[index];
+                float2 pixelCenterNorm = make_float2(invWidth * (static_cast<float>(px) + 0.5f),
+                                                    invHeight * (static_cast<float>(py) + 0.5f));
+                shadePixel(inSection[i], pixelCenterNorm, p, imgPtr);
+            }
+        }
+        
     }
 }
 
