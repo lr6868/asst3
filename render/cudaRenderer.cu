@@ -521,18 +521,14 @@ __global__ void kernelRenderCircles() {
         float3 p = *(float3*)(&cuConstRendererParams.position[index3]);
         float  rad = cuConstRendererParams.radius[index];
 
-        inSection[tIdx]=circleInBoxConservative(p.x, p.y, rad, boxL, boxR, boxT, boxB)?1:0;
+        inSection[tIdx]=index<cuConstRendererParams.numCircles ?(circleInBoxConservative(p.x, p.y, rad, boxL, boxR, boxT, boxB)?1:0):0;
         __syncthreads();
         sharedMemInclusiveScan(tIdx, inSection, inclusiveOutput, scratchPad, BLOCKSIZE);
         __syncthreads();
         findConservativeCircles(tIdx, index, inclusiveOutput, probableCircles);
         size_t numConservativeCircles = inclusiveOutput[BLOCKSIZE-1];
-
-
+        __syncthreads();
         for(size_t i=0;i<numConservativeCircles;i++){
-                if(blockIdx.x==0 &&blockIdx.y==0 &&threadIdx.x==0 &&threadIdx.y==0){
-                    printf("%d |",probableCircles[i]);
-                }
                 int index3 = 3 * probableCircles[i];
                 float3 p1 = *(float3*)(&cuConstRendererParams.position[index3]);
                 float2 pixelCenterNorm = make_float2(invWidth * (static_cast<float>(px) + 0.5f),
