@@ -500,16 +500,16 @@ __global__ void kernelRenderCircles() {
 
     // compute the bounding box of the circle. The bound is in integer
     // screen coordinates, so it's clamped to the edges of the screen.
-    short imageWidth = cuConstRendererParams.imageWidth;
-    short imageHeight = cuConstRendererParams.imageHeight;
+    const short imageWidth = cuConstRendererParams.imageWidth;
+    const short imageHeight = cuConstRendererParams.imageHeight;
 
     // Get the left, right, top and bottom of the section
-    float boxL = static_cast<float>(blockIdx.x) / gridDim.x;
-    float boxR = boxL + static_cast<float>(blockDim.x) / imageWidth;
-    float boxB = static_cast<float>(blockIdx.y) / gridDim.y;
-    float boxT = boxB + static_cast<float>(blockDim.y) / imageHeight;
+    const float boxL = static_cast<float>(blockIdx.x) / gridDim.x;
+    const float boxR = boxL + static_cast<float>(blockDim.x) / imageWidth;
+    const float boxB = static_cast<float>(blockIdx.y) / gridDim.y;
+    const float boxT = boxB + static_cast<float>(blockDim.y) / imageHeight;
     //index for circles
-    size_t tIdx = blockDim.x * threadIdx.y + threadIdx.x;
+    const size_t tIdx = blockDim.x * threadIdx.y + threadIdx.x;
 
     __shared__ uint inSection[BLOCKSIZE];
     __shared__ uint inclusiveOutput[BLOCKSIZE];
@@ -517,8 +517,8 @@ __global__ void kernelRenderCircles() {
     __shared__ uint scratchPad[2*BLOCKSIZE];
 
 
-    float invWidth = 1.f / imageWidth;
-    float invHeight = 1.f / imageHeight;
+    const float invWidth = 1.f / imageWidth;
+    const float invHeight = 1.f / imageHeight;
 
     float4* imgPtr = (float4*)(&cuConstRendererParams.imageData[4 * (py * imageWidth + px)]);
 
