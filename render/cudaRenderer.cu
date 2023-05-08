@@ -521,14 +521,22 @@ __global__ void kernelRenderCircles() {
         float3 p = *(float3*)(&cuConstRendererParams.position[index3]);
         float  rad = cuConstRendererParams.radius[index];
 
-        inSection[tIdx]=index<cuConstRendererParams.numCircles ?(circleInBoxConservative(p.x, p.y, rad, boxL, boxR, boxT, boxB)?1:0):0;
+        inSection[tIdx]=index<cuConstRendererParams.numCircles ?circleInBoxConservative(p.x, p.y, rad, boxL, boxR, boxT, boxB):0;
         __syncthreads();
         sharedMemInclusiveScan(tIdx, inSection, inclusiveOutput, scratchPad, BLOCKSIZE);
         __syncthreads();
         findConservativeCircles(tIdx, index, inclusiveOutput, probableCircles);
-        size_t numConservativeCircles = inclusiveOutput[BLOCKSIZE-1];
         __syncthreads();
-        for(size_t i=0;i<numConservativeCircles;i++){
+        size_t numConservativeCircles = inclusiveOutput[BLOCKSIZE-1];
+        inSection[tIdx]=index< numConservativeCircles ?circleInBox(p.x, p.y, rad, boxL, boxR, boxT, boxB):0;  
+        __syncthreads();
+        sharedMemInclusiveScan(tIdx, inSection, inclusiveOutput, scratchPad, BLOCKSIZE); //优化空间
+        __syncthreads();
+        //inSection is the output, using existing memory
+        findDefiniteCircles(tIdx, inclusiveOutput, inSection, probableCircles);
+        __syncthreads();
+        size_t numDefiniteCircles = inclusiveOutput[numConservativeCircles-1];
+        for(size_t i=0;i<numDefiniteCircles;i++){
                 int index3 = 3 * probableCircles[i];
                 float3 p1 = *(float3*)(&cuConstRendererParams.position[index3]);
                 float2 pixelCenterNorm = make_float2(invWidth * (static_cast<float>(px) + 0.5f),
