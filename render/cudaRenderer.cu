@@ -14,11 +14,13 @@
 #include "sceneLoader.h"
 #include "util.h"
 
-
-// #include "exclusiveScan.cu_inl"
-
 #define BLOCKDIM 32
 #define BLOCKSIZE 1024
+#define SCAN_BLOCK_DIM BLOCKSIZE
+
+#include "exclusiveScan.cu_inl"
+
+
 
 ////////////////////////////////////////////////////////////////////////////////////////
 // Putting all the cuda kernels here
@@ -61,6 +63,45 @@ __constant__ float  cuConstColorRamp[COLOR_MAP_SIZE][3];
 // file simpler and to seperate code that should not be modified
 #include "noiseCuda.cu_inl"
 #include "lookupColor.cu_inl"
+
+__inline__ __device__ void
+sharedMemInclusiveScan(int threadIndex, uint* sInput, uint* sOutput, volatile uint* sScratch, uint size)
+{
+    if (size > WARP_SIZE) {
+
+        uint idata = sInput[threadIndex];
+
+        //Bottom-level inclusive warp scan
+        uint warpResult = warpScanInclusive(threadIndex, idata, sScratch, WARP_SIZE);
+
+        // Save top elements of each warp for exclusive warp scan sync
+        // to wait for warp scans to complete (because s_Data is being
+        // overwritten)
+        __syncthreads();
+
+        if ( (threadIndex & (WARP_SIZE - 1)) == (WARP_SIZE - 1) )
+            sScratch[threadIndex >> LOG2_WARP_SIZE] = warpResult;
+
+        // wait for warp scans to complete
+        __syncthreads();
+
+        if ( threadIndex < (SCAN_BLOCK_DIM / WARP_SIZE)) {
+            // grab top warp elements
+            uint val = sScratch[threadIndex];
+            // calculate exclusive scan and write back to shared memory
+            sScratch[threadIndex] = warpScanExclusive(threadIndex, val, sScratch, size >> LOG2_WARP_SIZE);
+        }
+
+        //return updated warp scans with exclusive scan results
+        __syncthreads();
+
+        sOutput[threadIndex] = warpResult + sScratch[threadIndex >> LOG2_WARP_SIZE];
+
+    } else if (threadIndex < WARP_SIZE) {
+        uint idata = sInput[threadIndex];
+        sOutput[threadIndex] = warpScanInclusive(threadIndex, idata, sScratch, size);
+    }
+}
 
 
 __device__ __inline__ int
@@ -105,7 +146,15 @@ circleInBoxConservative(
     }
 }
 
-
+__inline__ __device__ void
+findConservativeCircles(size_t tIdx, size_t circleIdx, uint* inclusiveOutput, uint* probableCircles) {
+    if (tIdx == 0) {
+        if (inclusiveOutput[0] == 1) 
+            probableCircles[0] = circleIdx;
+    } else if (inclusiveOutput[tIdx] == (inclusiveOutput[tIdx-1]+1)) {
+        probableCircles[inclusiveOutput[tIdx-1]] = circleIdx;   
+    }
+}
 
 // kernelClearImageSnowflake -- (CUDA device code)
 //
@@ -454,9 +503,9 @@ __global__ void kernelRenderCircles() {
     size_t tIdx = blockDim.x * threadIdx.y + threadIdx.x;
 
     __shared__ uint inSection[BLOCKSIZE];
-    // __shared__ uint inclusiveOutput[BLOCKSIZE];
-    // __shared__ uint probableCircles[BLOCKSIZE];
-    // __shared__ uint scratchPad[2*BLOCKSIZE];
+    __shared__ uint inclusiveOutput[BLOCKSIZE];
+    __shared__ uint probableCircles[BLOCKSIZE];
+    __shared__ uint scratchPad[2*BLOCKSIZE];
 
 
     float invWidth = 1.f / imageWidth;
@@ -472,18 +521,24 @@ __global__ void kernelRenderCircles() {
         float3 p = *(float3*)(&cuConstRendererParams.position[index3]);
         float  rad = cuConstRendererParams.radius[index];
 
-        inSection[tIdx]=circleInBoxConservative(p.x, p.y, rad, boxL, boxR, boxT, boxB)?index:-1;
+        inSection[tIdx]=circleInBoxConservative(p.x, p.y, rad, boxL, boxR, boxT, boxB)?1:0;
         __syncthreads();
-        
-        for(size_t i=0;i<BLOCKSIZE;i++){
-            if(inSection[i]!=-1 && start+i<cuConstRendererParams.numCircles){
-                int index3 = 3 * inSection[i];
+        sharedMemInclusiveScan(tIdx, inSection, inclusiveOutput, scratchPad, BLOCKSIZE);
+        __syncthreads();
+        findConservativeCircles(tIdx, index, inclusiveOutput, probableCircles);
+        size_t numConservativeCircles = inclusiveOutput[BLOCKSIZE-1];
+
+
+        for(size_t i=0;i<numConservativeCircles;i++){
+                if(blockIdx.x==0 &&blockIdx.y==0 &&threadIdx.x==0 &&threadIdx.y==0){
+                    printf("%d |",probableCircles[i]);
+                }
+                int index3 = 3 * probableCircles[i];
                 float3 p1 = *(float3*)(&cuConstRendererParams.position[index3]);
                 float2 pixelCenterNorm = make_float2(invWidth * (static_cast<float>(px) + 0.5f),
                                                     invHeight * (static_cast<float>(py) + 0.5f));
-                shadePixel(inSection[i], pixelCenterNorm, p1, imgPtr);
+                shadePixel(probableCircles[i], pixelCenterNorm, p1, imgPtr);
             }
-        }
         __syncthreads();
     }
 }
