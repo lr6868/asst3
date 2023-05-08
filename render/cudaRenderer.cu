@@ -180,6 +180,15 @@ __global__ void kernelClearImageSnowflake() {
     // up as four seperate fp32 stores.
     *(float4*)(&cuConstRendererParams.imageData[offset]) = value;
 }
+__inline__ __device__ void
+findDefiniteCircles(size_t tIdx, uint* inclusiveOutput, uint* definiteCircles, uint* probableCircles) {
+    if (tIdx == 0) {
+        if (inclusiveOutput[0] == 1) 
+            definiteCircles[0] = probableCircles[0];
+    } else if (inclusiveOutput[tIdx] == (inclusiveOutput[tIdx-1]+1)) {
+        definiteCircles[inclusiveOutput[tIdx-1]] = probableCircles[tIdx];
+    }
+}
 
 // kernelClearImage --  (CUDA device code)
 //
@@ -528,7 +537,9 @@ __global__ void kernelRenderCircles() {
         findConservativeCircles(tIdx, index, inclusiveOutput, probableCircles);
         __syncthreads();
         size_t numConservativeCircles = inclusiveOutput[BLOCKSIZE-1];
-        inSection[tIdx]=index< numConservativeCircles ?circleInBox(p.x, p.y, rad, boxL, boxR, boxT, boxB):0;  
+        p = *(float3*)(&cuConstRendererParams.position[3*probableCircles[tIdx]]);
+        rad = cuConstRendererParams.radius[probableCircles[tIdx]];
+        inSection[tIdx]=tIdx< numConservativeCircles ?circleInBox(p.x, p.y, rad, boxL, boxR, boxT, boxB):0;  
         __syncthreads();
         sharedMemInclusiveScan(tIdx, inSection, inclusiveOutput, scratchPad, BLOCKSIZE); //优化空间
         __syncthreads();
@@ -537,11 +548,11 @@ __global__ void kernelRenderCircles() {
         __syncthreads();
         size_t numDefiniteCircles = inclusiveOutput[numConservativeCircles-1];
         for(size_t i=0;i<numDefiniteCircles;i++){
-                int index3 = 3 * probableCircles[i];
+                int index3 = 3 * inSection[i];
                 float3 p1 = *(float3*)(&cuConstRendererParams.position[index3]);
                 float2 pixelCenterNorm = make_float2(invWidth * (static_cast<float>(px) + 0.5f),
                                                     invHeight * (static_cast<float>(py) + 0.5f));
-                shadePixel(probableCircles[i], pixelCenterNorm, p1, imgPtr);
+                shadePixel(inSection[i], pixelCenterNorm, p1, imgPtr);
             }
         __syncthreads();
     }
