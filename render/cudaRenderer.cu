@@ -86,6 +86,27 @@ circleInBox(
 }
 
 
+__device__ __inline__ int
+circleInBoxConservative(
+    float circleX, float circleY, float circleRadius,
+    float boxL, float boxR, float boxT, float boxB)
+{
+
+    // expand box by circle radius.  Test if circle center is in the
+    // expanded box.
+
+    if ( circleX >= (boxL - circleRadius) &&
+         circleX <= (boxR + circleRadius) &&
+         circleY >= (boxB - circleRadius) &&
+         circleY <= (boxT + circleRadius) ) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+
+
 // kernelClearImageSnowflake -- (CUDA device code)
 //
 // Clear the image, setting the image to the white-gray gradation that
@@ -451,7 +472,7 @@ __global__ void kernelRenderCircles() {
         float3 p = *(float3*)(&cuConstRendererParams.position[index3]);
         float  rad = cuConstRendererParams.radius[index];
 
-        inSection[tIdx]=circleInBox(p.x, p.y, rad, boxL, boxR, boxT, boxB)?index:-1;
+        inSection[tIdx]=circleInBoxConservative(p.x, p.y, rad, boxL, boxR, boxT, boxB)?index:-1;
         __syncthreads();
         
         for(size_t i=0;i<BLOCKSIZE;i++){
