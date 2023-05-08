@@ -443,26 +443,27 @@ __global__ void kernelRenderCircles() {
 
     float4* imgPtr = (float4*)(&cuConstRendererParams.imageData[4 * (py * imageWidth + px)]);
 
-    for (int index=tIdx; index< cuConstRendererParams.numCircles;index+=BLOCKSIZE){//是否要将cuConstRendererParams.numCircles变成const？
+    for (size_t start=0; start< cuConstRendererParams.numCircles;start+=BLOCKSIZE){//是否要将cuConstRendererParams.numCircles变成const？
         
-        
+        int index=start+tIdx; 
         int index3 = 3 * index;
         // read position and radius
         float3 p = *(float3*)(&cuConstRendererParams.position[index3]);
         float  rad = cuConstRendererParams.radius[index];
 
-        inSection[tIdx]=circleInBox(p.x, p.y, rad, boxL, boxR, boxT, boxB)?index:0;
-        for(int i=0;i<BLOCKSIZE;i++){
-            if(inSection[i]){
+        inSection[tIdx]=circleInBox(p.x, p.y, rad, boxL, boxR, boxT, boxB)?index:-1;
+        __syncthreads();
+        
+        for(size_t i=0;i<BLOCKSIZE;i++){
+            if(inSection[i]!=-1 && start+i<cuConstRendererParams.numCircles){
                 int index3 = 3 * inSection[i];
-                p = *(float3*)(&cuConstRendererParams.position[index3]);
-                rad = cuConstRendererParams.radius[inSection[i]];
+                float3 p1 = *(float3*)(&cuConstRendererParams.position[index3]);
                 float2 pixelCenterNorm = make_float2(invWidth * (static_cast<float>(px) + 0.5f),
                                                     invHeight * (static_cast<float>(py) + 0.5f));
-                shadePixel(inSection[i], pixelCenterNorm, p, imgPtr);
+                shadePixel(inSection[i], pixelCenterNorm, p1, imgPtr);
             }
         }
-        
+        __syncthreads();
     }
 }
 
