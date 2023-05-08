@@ -525,9 +525,8 @@ __global__ void kernelRenderCircles() {
     for (size_t start=0; start< cuConstRendererParams.numCircles;start+=BLOCKSIZE){//是否要将cuConstRendererParams.numCircles变成const？
         
         int index=start+tIdx; 
-        int index3 = 3 * index;
         // read position and radius
-        float3 p = *(float3*)(&cuConstRendererParams.position[index3]);
+        float3 p = *(float3*)(&cuConstRendererParams.position[3 * index]);
         float  rad = cuConstRendererParams.radius[index];
 
         inSection[tIdx]=index<cuConstRendererParams.numCircles ?circleInBoxConservative(p.x, p.y, rad, boxL, boxR, boxT, boxB):0;
