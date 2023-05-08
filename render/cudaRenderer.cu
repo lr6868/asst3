@@ -522,7 +522,7 @@ __global__ void kernelRenderCircles() {
 
     float4* imgPtr = (float4*)(&cuConstRendererParams.imageData[4 * (py * imageWidth + px)]);
 
-    for (size_t start=0; start< cuConstRendererParams.numCircles;start+=BLOCKSIZE){//是否要将cuConstRendererParams.numCircles变成const？
+    for (int start=0; start< cuConstRendererParams.numCircles;start+=BLOCKSIZE){//是否要将cuConstRendererParams.numCircles变成const？
         
         int index=start+tIdx; 
         // read position and radius
@@ -535,9 +535,10 @@ __global__ void kernelRenderCircles() {
         __syncthreads();
         findConservativeCircles(tIdx, index, inclusiveOutput, probableCircles);
         __syncthreads();
-        size_t numConservativeCircles = inclusiveOutput[BLOCKSIZE-1];
-        p = *(float3*)(&cuConstRendererParams.position[3*probableCircles[tIdx]]);
-        rad = cuConstRendererParams.radius[probableCircles[tIdx]];
+        int numConservativeCircles = inclusiveOutput[BLOCKSIZE-1];
+        int k=probableCircles[tIdx];
+        p = *(float3*)(&cuConstRendererParams.position[3*k]);
+        rad = cuConstRendererParams.radius[k];
         inSection[tIdx]=tIdx< numConservativeCircles ?circleInBox(p.x, p.y, rad, boxL, boxR, boxT, boxB):0;  
         __syncthreads();
         sharedMemInclusiveScan(tIdx, inSection, inclusiveOutput, scratchPad, BLOCKSIZE); //优化空间
@@ -545,13 +546,13 @@ __global__ void kernelRenderCircles() {
         //inSection is the output, using existing memory
         findDefiniteCircles(tIdx, inclusiveOutput, inSection, probableCircles);
         __syncthreads();
-        size_t numDefiniteCircles = inclusiveOutput[numConservativeCircles-1];
-        for(size_t i=0;i<numDefiniteCircles;i++){
-                int index3 = 3 * inSection[i];
-                float3 p1 = *(float3*)(&cuConstRendererParams.position[index3]);
+        int numDefiniteCircles = inclusiveOutput[numConservativeCircles-1];
+        for(int i=0;i<numDefiniteCircles;i++){
+                k=inSection[i];
+                float3 p1 = *(float3*)(&cuConstRendererParams.position[3 * k]);
                 float2 pixelCenterNorm = make_float2(invWidth * (static_cast<float>(px) + 0.5f),
                                                     invHeight * (static_cast<float>(py) + 0.5f));
-                shadePixel(inSection[i], pixelCenterNorm, p1, imgPtr);
+                shadePixel(k, pixelCenterNorm, p1, imgPtr);
             }
         __syncthreads();
     }
