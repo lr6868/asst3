@@ -521,7 +521,8 @@ __global__ void kernelRenderCircles() {
     const float invHeight = 1.f / imageHeight;
 
     float4* imgPtr = (float4*)(&cuConstRendererParams.imageData[4 * (py * imageWidth + px)]);
-
+    float4 color;
+    color = *imgPtr;
     for (int start=0; start< cuConstRendererParams.numCircles;start+=BLOCKSIZE){//是否要将cuConstRendererParams.numCircles变成const？
         
         int index=start+tIdx; 
@@ -552,9 +553,12 @@ __global__ void kernelRenderCircles() {
                 float3 p1 = *(float3*)(&cuConstRendererParams.position[3 * k]);
                 float2 pixelCenterNorm = make_float2(invWidth * (static_cast<float>(px) + 0.5f),
                                                     invHeight * (static_cast<float>(py) + 0.5f));
-                shadePixel(k, pixelCenterNorm, p1, imgPtr);
+                shadePixel(k, pixelCenterNorm, p1, &color);
             }
         __syncthreads();
+    }
+    if (px < imageWidth && py < imageHeight) {
+        *imgPtr = color;
     }
 }
 
