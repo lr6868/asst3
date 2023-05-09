@@ -553,8 +553,7 @@ __global__ void kernelRenderCircles() {
         short numDefiniteCircles = inclusiveOutput[numConservativeCircles-1];
         for(short i=0;i<numDefiniteCircles;i++){
                 k=inSection[i];
-                float3 p1 = *(float3*)(&cuConstRendererParams.position[3 * k]);
-                shadePixel(k, pixelCenterNorm, p1, &color);
+                shadePixel(k, pixelCenterNorm, *(float3*)(&cuConstRendererParams.position[3 * k]), &color);
             }
         __syncthreads();
     }
