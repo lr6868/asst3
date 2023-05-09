@@ -18,7 +18,6 @@
 #define BLOCKSIZE 1024
 #define SCAN_BLOCK_DIM BLOCKSIZE
 
-#include "exclusiveScan.cu_inl"
 
 
 
@@ -59,10 +58,120 @@ __constant__ float  cuConstNoise1DValueTable[256];
 __constant__ float  cuConstColorRamp[COLOR_MAP_SIZE][3];
 
 
-// including parts of the CUDA code from external files to keep this
-// file simpler and to seperate code that should not be modified
-#include "noiseCuda.cu_inl"
-#include "lookupColor.cu_inl"
+
+__device__ __inline__ float2
+cudaVec2CellNoise(float3 location, int index)
+{
+    int integer_of_x = static_cast<int>( location.x );
+    int integer_of_y = static_cast<int>( location.y );
+    int integer_of_z = static_cast<int>( location.z );
+    int hash = cuConstNoiseXPermutationTable[ (integer_of_x*index) & 0xFF ];
+    hash = cuConstNoiseXPermutationTable[ ( hash + integer_of_y ) & 0xFF ];
+    hash = cuConstNoiseXPermutationTable[ ( hash + integer_of_z ) & 0xFF ];
+    float x_result = cuConstNoise1DValueTable[ hash ];
+    hash = cuConstNoiseYPermutationTable[ integer_of_x & 0xFF ];
+    hash = cuConstNoiseYPermutationTable[ ( hash + integer_of_y ) & 0xFF ];
+    hash = cuConstNoiseYPermutationTable[ ( hash + integer_of_z ) & 0xFF ];
+    float y_result = cuConstNoise1DValueTable[ hash ];
+
+    return make_float2(x_result, y_result);
+}
+
+
+__device__ __inline__ float3
+lookupColor(float coord) {
+
+    float scaledCoord = coord * (COLOR_MAP_SIZE-1);
+
+    // using short type rather than int type since 16-bit integer math
+    // is faster than 32-bit integrer math on NVIDIA GPUs
+    short maxValue = COLOR_MAP_SIZE-1;
+    short intCoord = static_cast<short>(scaledCoord);
+    short base = (intCoord < maxValue) ? intCoord : maxValue;  // min
+
+    // linearly interpolate between values in the table based on the
+    // value of coord
+    float weight = scaledCoord - static_cast<float>(base);
+    float oneMinusWeight = 1.f - weight;
+
+    float r = (oneMinusWeight * cuConstColorRamp[base][0]) + (weight * cuConstColorRamp[base+1][0]);
+    float g = (oneMinusWeight * cuConstColorRamp[base][1]) + (weight * cuConstColorRamp[base+1][1]);
+    float b = (oneMinusWeight * cuConstColorRamp[base][2]) + (weight * cuConstColorRamp[base+1][2]);
+    return make_float3(r, g, b);
+}
+
+
+
+//exclusive scan
+#define LOG2_WARP_SIZE 5U
+#define WARP_SIZE (1U << LOG2_WARP_SIZE)
+
+//Almost the same as naive scan1Inclusive, but doesn't need __syncthreads()
+//assuming size <= WARP_SIZE
+inline __device__ uint
+warpScanInclusive(int threadIndex, uint idata, volatile uint *s_Data, uint size){
+    // Note some of the calculations are obscure because they are optimized.
+    // For example, (threadIndex & (size - 1)) computes threadIndex % size,
+    // which works, assuming size is a power of 2.
+
+    uint pos = 2 * threadIndex - (threadIndex & (size - 1));
+    s_Data[pos] = 0;
+    pos += size;
+    s_Data[pos] = idata;
+
+    for(uint offset = 1; offset < size; offset <<= 1)
+        s_Data[pos] += s_Data[pos - offset];
+
+    return s_Data[pos];
+}
+
+inline __device__ uint warpScanExclusive(int threadIndex, uint idata, volatile uint *sScratch, uint size){
+    return warpScanInclusive(threadIndex, idata, sScratch, size) - idata;
+}
+
+__inline__ __device__ void
+sharedMemExclusiveScan(int threadIndex, uint* sInput, uint* sOutput, volatile uint* sScratch, uint size)
+{
+    if (size > WARP_SIZE) {
+
+        uint idata = sInput[threadIndex];
+
+        //Bottom-level inclusive warp scan
+        uint warpResult = warpScanInclusive(threadIndex, idata, sScratch, WARP_SIZE);
+
+        // Save top elements of each warp for exclusive warp scan sync
+        // to wait for warp scans to complete (because s_Data is being
+        // overwritten)
+        __syncthreads();
+
+        if ( (threadIndex & (WARP_SIZE - 1)) == (WARP_SIZE - 1) )
+            sScratch[threadIndex >> LOG2_WARP_SIZE] = warpResult;
+
+        // wait for warp scans to complete
+        __syncthreads();
+
+        if ( threadIndex < (SCAN_BLOCK_DIM / WARP_SIZE)) {
+            // grab top warp elements
+            uint val = sScratch[threadIndex];
+            // calculate exclusive scan and write back to shared memory
+            sScratch[threadIndex] = warpScanExclusive(threadIndex, val, sScratch, size >> LOG2_WARP_SIZE);
+        }
+
+        //return updated warp scans with exclusive scan results
+        __syncthreads();
+
+        sOutput[threadIndex] = warpResult + sScratch[threadIndex >> LOG2_WARP_SIZE] - idata;
+
+    } else if (threadIndex < WARP_SIZE) {
+        uint idata = sInput[threadIndex];
+        sOutput[threadIndex] = warpScanExclusive(threadIndex, idata, sScratch, size);
+    }
+}
+
+
+
+
+
 
 __inline__ __device__ void
 sharedMemInclusiveScan(int threadIndex, uint* sInput, uint* sOutput, volatile uint* sScratch, uint size)
