@@ -533,9 +533,8 @@ __global__ void kernelRenderCircles() {
         int index=start+tIdx; 
         // read position and radius
         float3 p = *(float3*)(&cuConstRendererParams.position[3 * index]);
-        float  rad = cuConstRendererParams.radius[index];
 
-        inSection[tIdx]=index<cuConstRendererParams.numCircles ?circleInBoxConservative(p.x, p.y, rad, boxL, boxR, boxT, boxB):0;
+        inSection[tIdx]=index<cuConstRendererParams.numCircles ?circleInBoxConservative(p.x, p.y, cuConstRendererParams.radius[index], boxL, boxR, boxT, boxB):0;
         __syncthreads();
         sharedMemInclusiveScan(tIdx, inSection, inclusiveOutput, scratchPad, BLOCKSIZE);
         __syncthreads();
@@ -544,8 +543,7 @@ __global__ void kernelRenderCircles() {
         short numConservativeCircles = inclusiveOutput[BLOCKSIZE-1];
         int k=probableCircles[tIdx];
         p = *(float3*)(&cuConstRendererParams.position[3*k]);
-        rad = cuConstRendererParams.radius[k];
-        inSection[tIdx]=tIdx< numConservativeCircles ?circleInBox(p.x, p.y, rad, boxL, boxR, boxT, boxB):0;  
+        inSection[tIdx]=tIdx< numConservativeCircles ?circleInBox(p.x, p.y,  cuConstRendererParams.radius[k], boxL, boxR, boxT, boxB):0;  
         __syncthreads();
         sharedMemInclusiveScan(tIdx, inSection, inclusiveOutput, scratchPad, BLOCKSIZE); //优化空间
         __syncthreads();
