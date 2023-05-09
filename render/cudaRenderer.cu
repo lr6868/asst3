@@ -503,11 +503,14 @@ __global__ void kernelRenderCircles() {
     const short imageWidth = cuConstRendererParams.imageWidth;
     const short imageHeight = cuConstRendererParams.imageHeight;
 
+    const float invWidth = 1.f / imageWidth;
+    const float invHeight = 1.f / imageHeight;
+
     // Get the left, right, top and bottom of the section
     const float boxL = static_cast<float>(blockIdx.x) / gridDim.x;
-    const float boxR = boxL + static_cast<float>(blockDim.x) / imageWidth;
+    const float boxR = boxL + static_cast<float>(blockDim.x) *invWidth;
     const float boxB = static_cast<float>(blockIdx.y) / gridDim.y;
-    const float boxT = boxB + static_cast<float>(blockDim.y) / imageHeight;
+    const float boxT = boxB + static_cast<float>(blockDim.y) *invHeight ;
     //index for circles
     const size_t tIdx = blockDim.x * threadIdx.y + threadIdx.x;
 
@@ -517,8 +520,7 @@ __global__ void kernelRenderCircles() {
     __shared__ uint scratchPad[2*BLOCKSIZE];
 
 
-    const float invWidth = 1.f / imageWidth;
-    const float invHeight = 1.f / imageHeight;
+    
 
     float4* imgPtr = (float4*)(&cuConstRendererParams.imageData[4 * (py * imageWidth + px)]);
     float4 color;
@@ -557,9 +559,7 @@ __global__ void kernelRenderCircles() {
             }
         __syncthreads();
     }
-    if (px < imageWidth && py < imageHeight) {
-        *imgPtr = color;
-    }
+    *imgPtr = color;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
