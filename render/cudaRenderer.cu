@@ -564,6 +564,32 @@ __global__ void kernelRenderCircles() {
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
+__global__ void kernelRenderCircles_l() {
+
+    const int px=blockIdx.x * blockDim.x + threadIdx.x;
+    const int py=blockIdx.y * blockDim.y + threadIdx.y;
+
+
+    // compute the bounding box of the circle. The bound is in integer
+    // screen coordinates, so it's clamped to the edges of the screen.
+    short imageWidth = cuConstRendererParams.imageWidth;
+    short imageHeight = cuConstRendererParams.imageHeight;
+
+
+    float invWidth = 1.f / imageWidth;
+    float invHeight = 1.f / imageHeight;
+
+    float4* imgPtr = (float4*)(&cuConstRendererParams.imageData[4 * (py * imageWidth + px)]);
+
+    for (int index=0; index< cuConstRendererParams.numCircles;index++){
+        int index3 = 3 * index;
+        // read position and radius
+        float3 p = *(float3*)(&cuConstRendererParams.position[index3]);
+        float2 pixelCenterNorm = make_float2(invWidth * (static_cast<float>(px) + 0.5f),
+                                                 invHeight * (static_cast<float>(py) + 0.5f));
+            shadePixel(index, pixelCenterNorm, p, imgPtr);
+    }
+}
 
 CudaRenderer::CudaRenderer() {
     image = NULL;
@@ -770,7 +796,16 @@ CudaRenderer::advanceAnimation() {
 
 void
 CudaRenderer::render() {
+    if (numCircles < 4){
+        dim3 blockDim(BLOCKDIM, BLOCKDIM);
+    size_t gridDimX = (image->width + blockDim.x - 1) / blockDim.x;
+    size_t gridDimY = (image->height + blockDim.y - 1) / blockDim.y;
+    dim3 gridDim(gridDimX, gridDimY);
 
+    kernelRenderCircles_l<<<gridDim, blockDim>>>();
+    cudaDeviceSynchronize();
+    }
+    else{
     dim3 blockDim(BLOCKDIM, BLOCKDIM);
     size_t gridDimX = (image->width + blockDim.x - 1) / blockDim.x;
     size_t gridDimY = (image->height + blockDim.y - 1) / blockDim.y;
@@ -778,4 +813,5 @@ CudaRenderer::render() {
 
     kernelRenderCircles<<<gridDim, blockDim>>>();
     cudaDeviceSynchronize();
+    }
 }
