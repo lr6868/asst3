@@ -494,8 +494,8 @@ shadePixel(int circleIndex, float2 pixelCenter, float3 p, float4* imagePtr) {
 // resulting image will be incorrect.
 __global__ void kernelRenderCircles() {
 
-    const int px=blockIdx.x * blockDim.x + threadIdx.x;
-    const int py=blockIdx.y * blockDim.y + threadIdx.y;
+    const short px=blockIdx.x * blockDim.x + threadIdx.x;
+    const short py=blockIdx.y * blockDim.y + threadIdx.y;
 
 
     // compute the bounding box of the circle. The bound is in integer
@@ -538,7 +538,7 @@ __global__ void kernelRenderCircles() {
         __syncthreads();
         findConservativeCircles(tIdx, index, inclusiveOutput, probableCircles);
         __syncthreads();
-        int numConservativeCircles = inclusiveOutput[BLOCKSIZE-1];
+        short numConservativeCircles = inclusiveOutput[BLOCKSIZE-1];
         int k=probableCircles[tIdx];
         p = *(float3*)(&cuConstRendererParams.position[3*k]);
         rad = cuConstRendererParams.radius[k];
@@ -549,8 +549,8 @@ __global__ void kernelRenderCircles() {
         //inSection is the output, using existing memory
         findDefiniteCircles(tIdx, inclusiveOutput, inSection, probableCircles);
         __syncthreads();
-        int numDefiniteCircles = inclusiveOutput[numConservativeCircles-1];
-        for(int i=0;i<numDefiniteCircles;i++){
+        short numDefiniteCircles = inclusiveOutput[numConservativeCircles-1];
+        for(short i=0;i<numDefiniteCircles;i++){
                 k=inSection[i];
                 float3 p1 = *(float3*)(&cuConstRendererParams.position[3 * k]);
                 float2 pixelCenterNorm = make_float2(invWidth * (static_cast<float>(px) + 0.5f),
