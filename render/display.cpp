@@ -139,7 +139,7 @@ renderPicture() {
 }
 
 void
-s //优化空间tartRendererWithDisplay(CircleRenderer* renderer) {
+startRendererWithDisplay(CircleRenderer* renderer) {
 
     // setup the display
 

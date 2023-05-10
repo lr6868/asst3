@@ -110,10 +110,6 @@ lookupColor(float coord) {
 //assuming size <= WARP_SIZE
 inline __device__ uint
 warpScanInclusive(int threadIndex, uint idata, volatile uint *s_Data, uint size){
-    // Note some of the calculations are obscure because they are optimized.
-    // For example, (threadIndex & (size - 1)) computes threadIndex % size,
-    // which works, assuming size is a power of 2.
-
     uint pos = 2 * threadIndex - (threadIndex & (size - 1));
     s_Data[pos] = 0;
     pos += size;
@@ -557,7 +553,6 @@ shadePixel_plain(int circleIndex, float2 pixelCenter, float3 p, float4* imagePtr
 
     float oneMinusAlpha = 1.f - alpha;
 
-    // BEGIN SHOULD-BE-ATOMIC REGION
     // global memory read
 
     float4 existingColor = *imagePtr;
@@ -569,8 +564,6 @@ shadePixel_plain(int circleIndex, float2 pixelCenter, float3 p, float4* imagePtr
 
     // global memory write
     *imagePtr = newColor;
-
-    // END SHOULD-BE-ATOMIC REGION
 }
 
 __device__ __inline__ void
@@ -601,7 +594,6 @@ shadePixel_snow(int circleIndex, float2 pixelCenter, float3 p, float4* imagePtr)
 
     float oneMinusAlpha = 1.f - alpha;
 
-    // BEGIN SHOULD-BE-ATOMIC REGION
     // global memory read
 
     float4 existingColor = *imagePtr;
@@ -613,8 +605,6 @@ shadePixel_snow(int circleIndex, float2 pixelCenter, float3 p, float4* imagePtr)
 
     // global memory write
     *imagePtr = newColor;
-
-    // END SHOULD-BE-ATOMIC REGION
 }
 
 
