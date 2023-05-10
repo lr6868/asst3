@@ -541,22 +541,19 @@ shadePixel_plain(int circleIndex, float2 pixelCenter, float3 p, float4* imagePtr
     float diffY = p.y - pixelCenter.y;
     float pixelDist = diffX * diffX + diffY * diffY;
 
-    float rad = cuConstRendererParams.radius[circleIndex];;
+    float rad = cuConstRendererParams.radius[circleIndex];
     float maxDist = rad * rad;
 
     // circle does not contribute to the image
     if (pixelDist > maxDist)
         return;
 
-    float3 rgb;
-    float alpha;
-
     // there is a non-zero contribution.  Now compute the shading value
 
     // simple: each circle has an assigned color
     int index3 = 3 * circleIndex;
-    rgb = *(float3*)&(cuConstRendererParams.color[index3]);
-    alpha = .5f;
+    float3 rgb = *(float3*)&(cuConstRendererParams.color[index3]);
+    float alpha = .5f;
 
     float oneMinusAlpha = 1.f - alpha;
 
@@ -583,25 +580,23 @@ shadePixel_snow(int circleIndex, float2 pixelCenter, float3 p, float4* imagePtr)
     float diffY = p.y - pixelCenter.y;
     float pixelDist = diffX * diffX + diffY * diffY;
 
-    float rad = cuConstRendererParams.radius[circleIndex];;
+    float rad = cuConstRendererParams.radius[circleIndex];
     float maxDist = rad * rad;
 
     // circle does not contribute to the image
     if (pixelDist > maxDist)
         return;
 
-    float3 rgb;
-    float alpha;
 
     const float kCircleMaxAlpha = .5f;
     const float falloffScale = 4.f;
 
     float normPixelDist = sqrt(pixelDist) / rad;
-    rgb = lookupColor(normPixelDist);
+    float3 rgb = lookupColor(normPixelDist);
 
     float maxAlpha = .6f + .4f * (1.f-p.z);
     maxAlpha = kCircleMaxAlpha * fmaxf(fminf(maxAlpha, 1.f), 0.f); // kCircleMaxAlpha * clamped value
-    alpha = maxAlpha * exp(-1.f * falloffScale * normPixelDist * normPixelDist);
+    float alpha = maxAlpha * exp(-1.f * falloffScale * normPixelDist * normPixelDist);
 
 
     float oneMinusAlpha = 1.f - alpha;
