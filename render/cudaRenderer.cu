@@ -664,18 +664,10 @@ __global__ void kernelRenderCircles_plain() {
         findConservativeCircles(tIdx, index, inclusiveOutput, probableCircles);
         __syncthreads();
         const short numConservativeCircles = inclusiveOutput[BLOCKSIZE-1];
-        int k=probableCircles[tIdx];
-        p = *(float3*)(&cuConstRendererParams.position[3*k]);
-        inSection[tIdx]=tIdx< numConservativeCircles ?circleInBox(p.x, p.y,  cuConstRendererParams.radius[k], boxL, boxR, boxT, boxB):0;  
-        __syncthreads();
-        sharedMemInclusiveScan(tIdx, inSection, inclusiveOutput, scratchPad, BLOCKSIZE);
-        __syncthreads();
-        //inSection is the output, using existing memory
-        findDefiniteCircles(tIdx, inclusiveOutput, inSection, probableCircles);
-        __syncthreads();
-        const short numDefiniteCircles = inclusiveOutput[numConservativeCircles-1];
-        for(short i=0;i<numDefiniteCircles;i++){
-                k=inSection[i];
+        
+        
+        for(short i=0;i<numConservativeCircles;i++){
+                int k=probableCircles[i];
                 shadePixel_plain(k, pixelCenterNorm, *(float3*)(&cuConstRendererParams.position[3 * k]), &color);
             }
         __syncthreads();
@@ -733,18 +725,9 @@ __global__ void kernelRenderCircles_snow() {
         findConservativeCircles(tIdx, index, inclusiveOutput, probableCircles);
         __syncthreads();
         const short numConservativeCircles = inclusiveOutput[BLOCKSIZE-1];
-        int k=probableCircles[tIdx];
-        p = *(float3*)(&cuConstRendererParams.position[3*k]);
-        inSection[tIdx]=tIdx< numConservativeCircles ?circleInBox(p.x, p.y,  cuConstRendererParams.radius[k], boxL, boxR, boxT, boxB):0;  
-        __syncthreads();
-        sharedMemInclusiveScan(tIdx, inSection, inclusiveOutput, scratchPad, BLOCKSIZE);
-        __syncthreads();
-        //inSection is the output, using existing memory
-        findDefiniteCircles(tIdx, inclusiveOutput, inSection, probableCircles);
-        __syncthreads();
-        const short numDefiniteCircles = inclusiveOutput[numConservativeCircles-1];
-        for(short i=0;i<numDefiniteCircles;i++){
-                k=inSection[i];
+        
+        for(short i=0;i<numConservativeCircles;i++){
+                int k=probableCircles[i];
                 shadePixel_snow(k, pixelCenterNorm, *(float3*)(&cuConstRendererParams.position[3 * k]), &color);
             }
         __syncthreads();
