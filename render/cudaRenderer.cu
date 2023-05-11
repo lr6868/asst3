@@ -657,7 +657,7 @@ __global__ void kernelRenderCircles_plain() {
         // read position and radius
         float3 p = *(float3*)(&cuConstRendererParams.position[3 * index]);
 
-        inSection[tIdx]=index<numc ?circleInBoxConservative(p.x, p.y, cuConstRendererParams.radius[index], boxL, boxR, boxT, boxB):0;
+        inSection[tIdx]=index<numc ?circleInBox(p.x, p.y, cuConstRendererParams.radius[index], boxL, boxR, boxT, boxB):0;
         __syncthreads();
         sharedMemInclusiveScan(tIdx, inSection, inclusiveOutput, scratchPad, BLOCKSIZE);
         __syncthreads();
@@ -718,7 +718,7 @@ __global__ void kernelRenderCircles_snow() {
         // read position and radius
         float3 p = *(float3*)(&cuConstRendererParams.position[3 * index]);
 
-        inSection[tIdx]=index<numc ?circleInBoxConservative(p.x, p.y, cuConstRendererParams.radius[index], boxL, boxR, boxT, boxB):0;
+        inSection[tIdx]=index<numc ?circleInBox(p.x, p.y, cuConstRendererParams.radius[index], boxL, boxR, boxT, boxB):0;
         __syncthreads();
         sharedMemInclusiveScan(tIdx, inSection, inclusiveOutput, scratchPad, BLOCKSIZE);
         __syncthreads();
